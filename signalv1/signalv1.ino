@@ -1,8 +1,7 @@
-// Traffic Signal System - Fixed Version
+// Traffic Light System - Minimal & Clean
 // Lane 1: LED1=Red, LED2=Amber, LED3=Green
 // Lane 2: LED4=Red, LED5=Amber, LED6=Green
-// Pedestrian Lane1: LED7=Red, LED8=Green
-// Pedestrian Lane2: LED9=Red, LED10=Green
+// Pedestrian: LED7/8=Lane1, LED9/10=Lane2
 
 // Lane 1 Signals
 const int LED1 = 13; // Red
@@ -24,156 +23,107 @@ const int LED10 = 2; // Lane2 Green
 const int buttonA = A0; // Lane1 Pedestrian
 const int buttonB = A1; // Lane2 Pedestrian
 
-// System states
-enum SystemState { NORMAL_OPERATION, PEDESTRIAN_LANE1, PEDESTRIAN_LANE2 };
-SystemState currentState = NORMAL_OPERATION;
-
-unsigned long lastStateChange = 0;
-const unsigned long LANE_DURATION = 5000;    // 5 seconds per lane
-const unsigned long AMBER_DURATION = 1000;   // 1 second amber
-const unsigned long PEDESTRIAN_DURATION = 5000; // 5 seconds pedestrian
-
-bool lane1Active = true; // Start with Lane1 green
+bool lane1Active = true;
+unsigned long previousMillis = 0;
+const long interval = 5000; // 5 seconds
 
 void setup() {
-  // Initialize all LED pins
-  int allLEDs[] = {LED1, LED2, LED3, LED4, LED5, LED6, LED7, LED8, LED9, LED10};
-  for (int i = 0; i < 10; i++) {
-    pinMode(allLEDs[i], OUTPUT);
-  }
+  // Initialize all pins
+  int leds[] = {LED1, LED2, LED3, LED4, LED5, LED6, LED7, LED8, LED9, LED10};
+  for (int i = 0; i < 10; i++) pinMode(leds[i], OUTPUT);
   
   pinMode(buttonA, INPUT_PULLUP);
   pinMode(buttonB, INPUT_PULLUP);
   
   // Initial LED test
-  allLEDsOn();
+  for (int i = 0; i < 10; i++) digitalWrite(leds[i], HIGH);
   delay(1000);
-  allLEDsOff();
+  for (int i = 0; i < 10; i++) digitalWrite(leds[i], LOW);
   
-  Serial.begin(9600);
-  Serial.println("Traffic System Started - Normal Operation");
+  // Start with Lane 1 Green, Lane 2 Red
+  setLane1Green();
+  setLane2Red();
+  setPedestrianSignals();
 }
 
 void loop() {
-  unsigned long currentTime = millis();
+  unsigned long currentMillis = millis();
   
-  // Check for button presses (with debouncing)
-  if (digitalRead(buttonA) == LOW && currentState == NORMAL_OPERATION) {
-    delay(50);
-    if (digitalRead(buttonA) == LOW) {
-      currentState = PEDESTRIAN_LANE1;
-      lastStateChange = currentTime;
-      Serial.println("Button A Pressed - Lane1 Pedestrian Activated");
-    }
+  // Check for pedestrian button presses
+  if (digitalRead(buttonA) == LOW) {
+    handlePedestrianLane1();
+  }
+  if (digitalRead(buttonB) == LOW) {
+    handlePedestrianLane2();
   }
   
-  if (digitalRead(buttonB) == LOW && currentState == NORMAL_OPERATION) {
-    delay(50);
-    if (digitalRead(buttonB) == LOW) {
-      currentState = PEDESTRIAN_LANE2;
-      lastStateChange = currentTime;
-      Serial.println("Button B Pressed - Lane2 Pedestrian Activated");
-    }
-  }
-  
-  // State machine
-  switch (currentState) {
-    case NORMAL_OPERATION:
-      handleNormalOperation(currentTime);
-      break;
-      
-    case PEDESTRIAN_LANE1:
-      handlePedestrianLane1(currentTime);
-      break;
-      
-    case PEDESTRIAN_LANE2:
-      handlePedestrianLane2(currentTime);
-      break;
-  }
-}
-
-void handleNormalOperation(unsigned long currentTime) {
-  if (lane1Active) {
-    // Lane 1 Green, Lane 2 Red
-    setLane1Green();
-    setLane2Red();
-    setPedestrianSignals(false, true); // Lane1 ped Red, Lane2 ped Green
+  // Normal traffic light sequence every 5 seconds
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
     
-    if (currentTime - lastStateChange >= LANE_DURATION) {
-      // Transition to Amber
-      setLane1Amber();
-      lastStateChange = currentTime;
-    }
-    
-    if (currentTime - lastStateChange >= AMBER_DURATION && 
-        currentTime - lastStateChange < AMBER_DURATION + 100) {
-      // Switch to Lane 2
+    if (lane1Active) {
+      // Lane 1: Green → Amber → Red
+      digitalWrite(LED3, LOW);  // Green off
+      delay(1000);
+      digitalWrite(LED2, HIGH); // Amber on
+      delay(1000);
+      digitalWrite(LED2, LOW);  // Amber off
+      digitalWrite(LED1, HIGH); // Red on
+      
+      // Lane 2: Red → Amber → Green
+      delay(1000);
+      digitalWrite(LED5, HIGH); // Amber on
+      delay(1000);
+      digitalWrite(LED5, LOW);  // Amber off
+      digitalWrite(LED4, LOW);  // Red off
+      digitalWrite(LED6, HIGH); // Green on
+      
       lane1Active = false;
-      lastStateChange = currentTime;
-      Serial.println("Switching to Lane 2");
-    }
-  } else {
-    // Lane 2 Green, Lane 1 Red  
-    setLane2Green();
-    setLane1Red();
-    setPedestrianSignals(true, false); // Lane1 ped Green, Lane2 ped Red
-    
-    if (currentTime - lastStateChange >= LANE_DURATION) {
-      // Transition to Amber
-      setLane2Amber();
-      lastStateChange = currentTime;
-    }
-    
-    if (currentTime - lastStateChange >= AMBER_DURATION && 
-        currentTime - lastStateChange < AMBER_DURATION + 100) {
-      // Switch to Lane 1
+    } else {
+      // Lane 2: Green → Amber → Red
+      digitalWrite(LED6, LOW);  // Green off
+      delay(1000);
+      digitalWrite(LED5, HIGH); // Amber on
+      delay(1000);
+      digitalWrite(LED5, LOW);  // Amber off
+      digitalWrite(LED4, HIGH); // Red on
+      
+      // Lane 1: Red → Amber → Green
+      delay(1000);
+      digitalWrite(LED2, HIGH); // Amber on
+      delay(1000);
+      digitalWrite(LED2, LOW);  // Amber off
+      digitalWrite(LED1, LOW);  // Red off
+      digitalWrite(LED3, HIGH); // Green on
+      
       lane1Active = true;
-      lastStateChange = currentTime;
-      Serial.println("Switching to Lane 1");
     }
+    
+    setPedestrianSignals();
   }
 }
 
-void handlePedestrianLane1(unsigned long currentTime) {
-  // Lane 1 Red, Lane 2 can work
+void handlePedestrianLane1() {
+  // Stop Lane 1, keep Lane 2 working
   setLane1Red();
-  setLane2Green(); // Lane 2 continues working
-  setPedestrianSignals(true, false); // Lane1 ped Green, Lane2 ped Red
-  
-  if (currentTime - lastStateChange >= PEDESTRIAN_DURATION) {
-    // Return to normal operation after 3 second delay
-    delay(3000);
-    currentState = NORMAL_OPERATION;
-    lastStateChange = currentTime;
-    Serial.println("Returning to Normal Operation");
-  }
+  setPedestrianLane1Green();
+  delay(5000); // Pedestrian crossing time
+  setPedestrianSignals();
+  delay(3000); // 3 second delay before returning
 }
 
-void handlePedestrianLane2(unsigned long currentTime) {
-  // Lane 2 Red, Lane 1 can work
+void handlePedestrianLane2() {
+  // Stop Lane 2, keep Lane 1 working
   setLane2Red();
-  setLane1Green(); // Lane 1 continues working
-  setPedestrianSignals(false, true); // Lane1 ped Red, Lane2 ped Green
-  
-  if (currentTime - lastStateChange >= PEDESTRIAN_DURATION) {
-    // Return to normal operation after 3 second delay
-    delay(3000);
-    currentState = NORMAL_OPERATION;
-    lastStateChange = currentTime;
-    Serial.println("Returning to Normal Operation");
-  }
+  setPedestrianLane2Green();
+  delay(5000); // Pedestrian crossing time
+  setPedestrianSignals();
+  delay(3000); // 3 second delay before returning
 }
 
-// LED control functions
 void setLane1Red() {
   digitalWrite(LED1, HIGH);
   digitalWrite(LED2, LOW);
-  digitalWrite(LED3, LOW);
-}
-
-void setLane1Amber() {
-  digitalWrite(LED1, LOW);
-  digitalWrite(LED2, HIGH);
   digitalWrite(LED3, LOW);
 }
 
@@ -189,33 +139,35 @@ void setLane2Red() {
   digitalWrite(LED6, LOW);
 }
 
-void setLane2Amber() {
-  digitalWrite(LED4, LOW);
-  digitalWrite(LED5, HIGH);
-  digitalWrite(LED6, LOW);
-}
-
 void setLane2Green() {
   digitalWrite(LED4, LOW);
   digitalWrite(LED5, LOW);
   digitalWrite(LED6, HIGH);
 }
 
-void setPedestrianSignals(bool lane1Green, bool lane2Green) {
-  digitalWrite(LED7, !lane1Green);  // Red is inverse of Green
-  digitalWrite(LED8, lane1Green);
-  digitalWrite(LED9, !lane2Green);
-  digitalWrite(LED10, lane2Green);
-}
-
-void allLEDsOn() {
-  for (int i = 2; i <= 13; i++) {
-    digitalWrite(i, HIGH);
+void setPedestrianSignals() {
+  // Set pedestrian signals based on current lane activity
+  if (lane1Active) {
+    // Lane 1 Green: Lane1 pedestrian Red, Lane2 pedestrian Green
+    digitalWrite(LED7, HIGH);  // Lane1 Red
+    digitalWrite(LED8, LOW);   // Lane1 Green off
+    digitalWrite(LED9, LOW);   // Lane2 Red off
+    digitalWrite(LED10, HIGH); // Lane2 Green
+  } else {
+    // Lane 2 Green: Lane1 pedestrian Green, Lane2 pedestrian Red
+    digitalWrite(LED7, LOW);   // Lane1 Red off
+    digitalWrite(LED8, HIGH);  // Lane1 Green
+    digitalWrite(LED9, HIGH);  // Lane2 Red
+    digitalWrite(LED10, LOW);  // Lane2 Green off
   }
 }
 
-void allLEDsOff() {
-  for (int i = 2; i <= 13; i++) {
-    digitalWrite(i, LOW);
-  }
+void setPedestrianLane1Green() {
+  digitalWrite(LED7, LOW);   // Lane1 Red off
+  digitalWrite(LED8, HIGH);  // Lane1 Green on
+}
+
+void setPedestrianLane2Green() {
+  digitalWrite(LED9, LOW);   // Lane2 Red off
+  digitalWrite(LED10, HIGH); // Lane2 Green on
 }
